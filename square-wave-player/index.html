@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>square-wave-player</title>
+</head>
+<body>
+Volume: <span id="volume-text"></span><br />
+<input
+    id="volume-range"
+    type="range"
+    min="1"
+    max="100"
+    oninput="onChangeVolume(this)"
+    style="width: 129px;"
+/>
+<br />
+Frequency: <span id="frequency-text"></span><br />
+<input
+    id="frequency-range"
+    type="range"
+    min="0"
+    max="2000"
+    oninput="onChangeFrequency(this)"
+    style="width: 257px;"
+/>
+<br />
+<br />
+<button onclick="play()">TEST</button>
+<button onclick="playScenario()">PLAY</button>
+<button onclick="stopScenario(); stop();">STOP</button>
+<br />
+<br />
+<textarea
+    id="scenario-edit"
+    style="width: 100%; min-height: 240px; resize: vertical; padding: 8px; box-sizing: border-box;"
+></textarea>
+(duration[ms], frequency[Hz])
+
+<script>
+let view = {
+    volumeRange: document.querySelector("#volume-range"),
+    volumeText: document.querySelector("#volume-text"),
+    frequencyRange: document.querySelector("#frequency-range"),
+    frequencyText: document.querySelector("#frequency-text"),
+    scenarioEdit: document.querySelector("#scenario-edit"),
+};
+
+let state = {
+    volume: 5, // 1-100
+    frequency: 440, // 0-2000
+    scenarioTimelineIndex: null,
+    scenarioPlaybackEndTime: null,
+    scenario: {
+        timeline: [
+            // { ms, hz }, ...
+            { duration:  200, frequency: 440 },
+            { duration:  800 },
+            { duration:  200, frequency: 440 },
+            { duration:  800 },
+            { duration:  200, frequency: 440 },
+            { duration:  800 },
+            { duration: 1000, frequency: 880 },
+        ],
+    },
+};
+
+let context = null;
+let gain = null;
+let oscillator = null;
+let scenarioInterval = null;
+
+function updateVolume() {
+    if (gain) {
+        gain.gain.setValueAtTime(state.volume * 0.01, context.currentTime);
+    }
+}
+
+function updateFrequency() {
+    if (oscillator) {
+        oscillator.frequency.value = state.frequency;
+    }
+}
+
+function play(frequency) {
+    if (!context) {
+        // NOTE: The AudioContext must be created after a user gesture on the page. 
+        context = new AudioContext();
+        gain = context.createGain();
+        gain.connect(context.destination);
+        updateVolume(state.volume);
+    }
+
+    if (oscillator) {
+        return;
+    }
+    oscillator = context.createOscillator();
+    oscillator.connect(gain);
+    oscillator.type = 'square';
+    oscillator.frequency.value = frequency ?? state.frequency;
+    oscillator.start();
+}
+
+function stop() {
+    if (oscillator) {
+        oscillator.stop();
+        oscillator = null;
+    }
+}
+
+function playScenario() {
+    if (scenarioInterval) {
+        return;
+    }
+
+    try {
+        // xxx
+        state.scenario.timeline = parseTimeline();
+    } catch (error) {
+        alert(error);
+        return;
+    }
+
+    // NOTE: Play the first wave.
+    do {
+        let index = 0;
+        let wave = state.scenario.timeline[index];
+        state = {
+            ...state,
+            scenarioTimelineIndex: index,
+            scenarioPlaybackEndTime: new Date().getTime() + wave.duration,
+            frequency: wave.frequency ?? 0,
+        };
+        stop();
+        if (wave.frequency) {
+            play(wave.frequency);
+        }
+        render();
+    } while (false);
+    scenarioInterval = setInterval(() => {
+        let currentTime = new Date().getTime();
+        if (currentTime > state.scenarioPlaybackEndTime) {
+            // NOTE: Play the next wave.
+            do {
+                let index = state.scenarioTimelineIndex + 1;
+                if (index >= state.scenario.timeline.length) {
+                    stop();
+                    stopScenario();
+                    break;
+                }
+                let wave = state.scenario.timeline[index];
+                state = {
+                    ...state,
+                    scenarioTimelineIndex: index,
+                    scenarioPlaybackEndTime: state.scenarioPlaybackEndTime + wave.duration,
+                    frequency: wave.frequency ?? 0,
+                };
+                stop();
+                if (wave.frequency > 0) {
+                    play(wave.frequency);
+                }
+                render();
+            } while (false);
+        }
+    }, 100);
+}
+
+function stopScenario() {
+    if (scenarioInterval) {
+        clearInterval(scenarioInterval);
+        scenarioInterval = null;
+    }
+}
+
+function parseTimeline() {
+    let timelin = [];
+    return view.scenarioEdit.value
+        .split('\n')
+        .map(x => {
+            let v = x.split(',');
+            return {
+                duration: parseFloat(v[0]),
+                frequency: v.length > 1 ? parseFloat(v[1]) : null
+            };
+        });
+}
+
+function render() {
+    view.volumeRange.value = `${state.volume}`;
+    view.volumeText.innerText = `${state.volume}`;
+    view.frequencyRange.value = `${state.frequency}`;
+    view.frequencyText.innerText = `${state.frequency}`;
+}
+
+function onChangeVolume(sender) {
+    state.volume = sender.value;
+    updateVolume();
+    render();
+}
+
+function onChangeFrequency(sender) {
+    state.frequency = sender.value;
+    updateFrequency();
+    render();
+}
+
+updateVolume();
+render();
+// xxx:
+view.scenarioEdit.value = state.scenario.timeline.map(x => x.frequency ? `${x.duration}, ${x.frequency}` : x.duration).join('\n');
+</script>
+
+</body>
+</html>
