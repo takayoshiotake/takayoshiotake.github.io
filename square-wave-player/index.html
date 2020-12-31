@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8"><!-- ✅ あ keeps UTF-8 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>square-wave-player</title>
 </head>
 <body>
@@ -77,14 +79,19 @@ function updateVolume() {
 
 function updateFrequency() {
     if (oscillator) {
-        oscillator.frequency.value = state.frequency;
+        // NOTE: This does not work on my mobile device (as of 2020-12-31)
+        //oscillator.frequency.value = state.frequency;
+        // HACK: Solve the above problem.
+        stop();
+        play();
     }
 }
 
 function play(frequency) {
     if (!context) {
-        // NOTE: The AudioContext must be created after a user gesture on the page. 
-        context = new AudioContext();
+        // NOTE: The AudioContext must be created after a user gesture on the page.
+        // HACK: Support WebKit
+        context = new (window.AudioContext || window.webkitAudioContext)();
         gain = context.createGain();
         gain.connect(context.destination);
         updateVolume(state.volume);
