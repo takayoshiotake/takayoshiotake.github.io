@@ -127,6 +127,9 @@ function playScenario() {
         return;
     }
 
+    if (state.scenario.timeline.length == 0) {
+        return;
+    }
     // NOTE: Play the first wave.
     do {
         let index = 0;
@@ -168,7 +171,7 @@ function playScenario() {
                 render();
             } while (false);
         }
-    }, 100);
+    }, 10);
 }
 
 function stopScenario() {
@@ -178,17 +181,49 @@ function stopScenario() {
     }
 }
 
+const FREQUENCY_OF_A4_IN_HZ = 440;
+// Eequal temperament
+// MEMO: C# => 1, D♭ => 1, D# => 3, ... 
+const PITCH_INDEX_TABLE = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
+const PITCH_INDEX_OF_A4 = 12 * 4 + PITCH_INDEX_TABLE['A'];
+
+function parseNote(str) {
+    // name: CDEFGAB
+    // octave: integer
+    // accidental: +|-|#
+    const found = str.match(/^(?<name>[A-Ga-g])(?<octave>-?\d+)(?<accidental>(?:\+|-|#)*)$/);
+    if (found) {
+        const { name, octave, accidental } = found.groups;
+
+        let pitchIndex = 12 * Number(octave) + PITCH_INDEX_TABLE[name.toUpperCase()];
+        if (accidental.length > 0) {
+            pitchIndex += (accidental.match(/\+|#/g) ?? []).length;
+            pitchIndex -= (accidental.match(/-/g) ?? []).length;
+        }
+
+        const frequency = FREQUENCY_OF_A4_IN_HZ * Math.pow(2, (pitchIndex - PITCH_INDEX_OF_A4) / 12);
+        //console.debug(`${found} => ${pitchIndex} => ${frequency}`);
+        return frequency;
+    }
+    return null;
+}
+
+function parseFrequency(str) {
+    return parseNote(str) ?? Number(str);
+}
+
 function parseTimeline() {
     let timelin = [];
     return view.scenarioEdit.value
         .split('\n')
         .map(x => {
-            let v = x.split(',');
+            let v = x.split(',').map(x => x.trim());
             return {
                 duration: parseFloat(v[0]),
-                frequency: v.length > 1 ? parseFloat(v[1]) : null
+                frequency: v.length > 1 ? parseFrequency(v[1]) : null
             };
-        });
+        })
+        .filter(x => x != null && x.duration > 0);
 }
 
 function render() {
